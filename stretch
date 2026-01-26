@@ -1,132 +1,111 @@
 $DebugPreference = "SilentlyContinue"
 
-Write-Host "Select Mode:" -ForegroundColor Cyan
+
+
+Write-Host "Select Mode:" -ForegroundColor Pink
+
 Write-Host "1. Normal Mode"
+
 Write-Host "2. Debug Mode"
+
+Write-Host "3. Remove Stretch and Fix Settings"
+
 $mode = Read-Host "Choice"
 
-if ($mode -eq "2") {
-    $DebugPreference = "Continue"
-    Write-Host "[DEBUG] Debug Mode Enabled.`n" -ForegroundColor Yellow
-}
 
-if (Get-Process -Name "VALORANT*" -ErrorAction SilentlyContinue) {
-    Write-Error "VALORANT is running. Close the game and try again."
-    Read-Host "Press Enter to exit"
-    return
-}
-
-$resX = Read-Host "Enter Width (e.g., 1280)"
-$resY = Read-Host "Enter Height (e.g., 960)"
 
 $configPath = "$env:LOCALAPPDATA\VALORANT\Saved\Config"
+
 $riotLocalFile = "$configPath\WindowsClient\RiotLocalMachine.ini"
 
-if ($mode -eq "2") { Write-Host "[DEBUG] Target: $riotLocalFile" -ForegroundColor Gray }
+
+
+if ($mode -eq "3") {
+
+    if (-not (Test-Path $riotLocalFile)) {
+
+        Write-Error "RiotLocalMachine.ini not found."
+
+        Read-Host; return
+
+    }
+
+    $guidLine = Select-String -Path $riotLocalFile -Pattern "LastKnownUser=(.*)"
+
+    $guid = $guidLine.Matches.Groups[1].Value.Trim()
+
+    $userFolder = Get-ChildItem -Path $configPath -Directory | Where-Object { $_.Name -like "$guid*" } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+    $iniFile = "$($userFolder.FullName)\WindowsClient\GameUserSettings.ini"
+
+
+
+    if (Test-Path $iniFile) {
+
+        Set-ItemProperty $iniFile -Name IsReadOnly -Value $false
+
+        $lines = Get-Content $iniFile
+
+        $filteredLines = $lines | Where-Object { $_ -ne "FullscreenMode=2" }
+
+        $filteredLines | Set-Content $iniFile -Encoding UTF8
+
+        Write-Host "Stretch removed and Read-Only turned off." -ForegroundColor Green
+
+    } else {
+
+        Write-Error "GameUserSettings.ini not found."
+
+    }
+
+    Read-Host "Press Enter to exit."; return
+
+}
+
+
+
+if ($mode -eq "2") {
+
+    $DebugPreference = "Continue"
+
+    Write-Host "[DEBUG] Debug Mode Enabled.`n" -ForegroundColor Yellow
+
+}
+
+
+
+if (Get-Process -Name "VALORANT*" -ErrorAction SilentlyContinue) {
+
+    Write-Error "VALORANT is running. Close the game and try again."
+
+    Read-Host "Press Enter to exit"; return
+
+}
+
+
+
+$resX = Read-Host "Enter Width (e.g., 1280)"
+
+$resY = Read-Host "Enter Height (e.g., 960)"
+
+
 
 if (-not (Test-Path $riotLocalFile)) {
+
     Write-Error "RiotLocalMachine.ini not found."
-    Read-Host
-    return
+
+    Read-Host; return
+
 }
+
+
 
 $guidLine = Select-String -Path $riotLocalFile -Pattern "LastKnownUser=(.*)"
+
 $guid = $guidLine.Matches.Groups[1].Value.Trim()
 
-if (-not $guid) {
-    Write-Error "Failed to read GUID."
-    Read-Host
-    return
-}
+
 
 $userFolder = Get-ChildItem -Path $configPath -Directory |
+
     Where-Object { $_.Name -like "$guid*" } |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-
-if (-not $userFolder) {
-    Write-Error "User folder not found."
-    Read-Host
-    return
-}
-
-$targetFolder = "$($userFolder.FullName)\WindowsClient"
-$gameSettingsPath = "$targetFolder\GameUserSettings.ini"
-
-if (-not (Test-Path $gameSettingsPath)) {
-    Write-Error "GameUserSettings.ini missing."
-    Read-Host
-    return
-}
-
-$currentDir = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
-$helperFile = Join-Path $currentDir "Valorant_Config_Path.txt"
-"Your Valorant Config Folder: `r`n$targetFolder" | Set-Content -Path $helperFile
-
-if ((Get-Item $gameSettingsPath).IsReadOnly) {
-    Set-ItemProperty $gameSettingsPath -Name IsReadOnly -Value $false
-}
-
-Copy-Item $gameSettingsPath "$gameSettingsPath.bak" -Force
-
-$settings = Get-Content $gameSettingsPath
-$newSettings = @()
-$insideShooter = $false
-$fullscreenInserted = $false
-
-foreach ($line in $settings) {
-    $trimmed = $line.Trim()
-
-    if ($trimmed -eq "[/Script/ShooterGame.ShooterGameUserSettings]") {
-        $insideShooter = $true
-        $newSettings += $line
-        continue
-    }
-
-    if ($trimmed -match "^\[.*\]") {
-        if ($insideShooter -and -not $fullscreenInserted) {
-            $newSettings += "FullscreenMode=2"
-            $newSettings += "" 
-            $fullscreenInserted = $true
-        }
-        $insideShooter = $false
-    }
-
-    if ($insideShooter) {
-        if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
-
-        $originalLine = $line
-        switch -Wildcard ($trimmed) {
-            "bShouldLetterbox=*" { $line = "bShouldLetterbox=False" }
-            "bLastConfirmedShouldLetterbox=*" { $line = "bLastConfirmedShouldLetterbox=False" }
-            "ResolutionSizeX=*" { $line = "ResolutionSizeX=$resX" }
-            "ResolutionSizeY=*" { $line = "ResolutionSizeY=$resY" }
-            "LastUserConfirmedResolutionSizeX=*" { $line = "LastUserConfirmedResolutionSizeX=$resX" }
-            "LastUserConfirmedResolutionSizeY=*" { $line = "LastUserConfirmedResolutionSizeY=$resY" }
-            "LastConfirmedFullscreenMode=*" { $line = "LastConfirmedFullscreenMode=0" }
-            "PreferredFullscreenMode=*" { $line = "PreferredFullscreenMode=0" }
-            "FullscreenMode=*" {
-                $line = "FullscreenMode=2"
-                $fullscreenInserted = $true
-            }
-        }
-        if ($mode -eq "2" -and $originalLine -ne $line) {
-            Write-Host "[DEBUG] Changed: $originalLine -> $line" -ForegroundColor DarkCyan
-        }
-    }
-    $newSettings += $line
-}
-
-if ($insideShooter -and -not $fullscreenInserted) {
-    $newSettings += "FullscreenMode=2"
-}
-
-$newSettings | Set-Content $gameSettingsPath -Encoding UTF8
-
-Set-ItemProperty $gameSettingsPath -Name IsReadOnly -Value $true
-
-Write-Host "`nApplied successfully ($resX x $resY)" -ForegroundColor Green
-Write-Host "Config set to Read-Only." -ForegroundColor Cyan
-Write-Host "Path saved to Valorant_Config_Path.txt" -ForegroundColor Yellow
-Write-Host "`nPress Enter to exit."
-Read-Host
