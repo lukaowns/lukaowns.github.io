@@ -9,6 +9,7 @@ $mode = Read-Host "Choice"
 $configPath = "$env:LOCALAPPDATA\VALORANT\Saved\Config"
 $riotLocalFile = "$configPath\WindowsClient\RiotLocalMachine.ini"
 $docPath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Valorant Stretch"
+$discord = "https://discord.gg/7bee9YVnUn"
 
 if ($mode -eq "3") {
     Write-Host "[DEBUG] Starting Removal Process..." -ForegroundColor Yellow
@@ -33,7 +34,8 @@ if ($mode -eq "3") {
         }
     }
     Write-Host "`nStretch removed and Read-Only turned off for $count folder(s)." -ForegroundColor Green
-    Read-Host "Press Enter to exit."; return
+    Write-Host "Support: " -NoNewline; Write-Host $discord -ForegroundColor Magenta
+    Read-Host "`nPress Enter to exit."; return
 }
 
 if ($mode -eq "2") {
@@ -121,5 +123,6 @@ $pathLog | Set-Content -Path $helperFile
 Write-Host "`nApplied successfully to $appliedCount account folder(s) ($resX x $resY)" -ForegroundColor Green
 Write-Host "Configs set to Read-Only." -ForegroundColor Cyan
 Write-Host "Folder paths saved to: $docPath" -ForegroundColor Yellow
+Write-Host "`nSupport: " -NoNewline; Write-Host $discord -ForegroundColor Magenta
 Write-Host "`nPress Enter to exit."
 Read-Host
