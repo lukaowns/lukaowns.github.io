@@ -8,7 +8,9 @@ $mode = Read-Host "Choice"
 
 $configPath = "$env:LOCALAPPDATA\VALORANT\Saved\Config"
 $riotLocalFile = "$configPath\WindowsClient\RiotLocalMachine.ini"
-$docPath = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Valorant Stretch"
+# Robust Documents path detection (Works for OneDrive and non-English Windows)
+$realDocs = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::MyDocuments)
+$docPath = Join-Path $realDocs "Valorant Stretch"
 $discord = "https://discord.gg/7bee9YVnUn"
 
 if ($mode -eq "3") {
@@ -29,7 +31,7 @@ if ($mode -eq "3") {
             
             $lines = Get-Content $iniFile
             $filteredLines = $lines | Where-Object { $_.Trim() -ne "FullscreenMode=2" }
-            $filteredLines | Set-Content $iniFile -Encoding UTF8
+            $filteredLines | Set-Content $iniFile -Encoding UTF8 -Force
             $count++
         }
     }
@@ -57,7 +59,11 @@ if (-not (Test-Path $riotLocalFile)) { Write-Error "RiotLocalMachine.ini not fou
 $guidLine = Select-String -Path $riotLocalFile -Pattern "LastKnownUser=(.*)"
 $guid = $guidLine.Matches.Groups[1].Value.Trim()
 
-if (-not (Test-Path $docPath)) { New-Item -Path $docPath -ItemType Directory | Out-Null }
+# --- FIXED SECTION: Force creating the folder to bypass OneDrive errors ---
+if (-not (Test-Path -Path $docPath)) { 
+    New-Item -Path $docPath -ItemType Directory -Force | Out-Null 
+}
+
 $helperFile = Join-Path $docPath "Config_Path.txt"
 $pathLog = "Folders updated:`r`n"
 $userFolders = Get-ChildItem -Path $configPath -Directory | Where-Object { $_.Name -like "$guid*" }
@@ -114,15 +120,16 @@ foreach ($folder in $userFolders) {
     }
 
     if ($insideShooter -and -not $fullscreenInserted) { $newSettings += "FullscreenMode=2" }
-    $newSettings | Set-Content $gameSettingsPath -Encoding UTF8
+    $newSettings | Set-Content $gameSettingsPath -Encoding UTF8 -Force
     Set-ItemProperty $gameSettingsPath -Name IsReadOnly -Value $true
 }
 
-$pathLog | Set-Content -Path $helperFile
+# --- FIXED SECTION: Force writing the log file ---
+$pathLog | Set-Content -Path $helperFile -Force
 
 Write-Host "`nApplied successfully to $appliedCount account folder(s) ($resX x $resY)" -ForegroundColor Green
 Write-Host "Configs set to Read-Only." -ForegroundColor Cyan
 Write-Host "Folder paths saved to: $docPath" -ForegroundColor Yellow
-Write-Host "`nSupport: " -NoNewline; Write-Host $discord -ForegroundColor Magenta
+Write-Host "Support: " -NoNewline; Write-Host $discord -ForegroundColor Magenta
 Write-Host "`nPress Enter to exit."
 Read-Host
